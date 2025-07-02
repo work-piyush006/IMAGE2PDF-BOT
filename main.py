@@ -1,13 +1,12 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
-    MessageHandler, ContextTypes, filters
+    ApplicationBuilder, ContextTypes, CommandHandler,
+    CallbackQueryHandler, MessageHandler, filters
 )
 from fpdf import FPDF
 import os
 import time
 
-# --- CONFIG ---
 BOT_TOKEN = "7693918135:AAGO-4A2lCRMaDnpmItkOY94w1f16_D0iSw"
 UPI_ID = "work.piyush006@fam"
 QR_IMAGE_PATH = "Qr.png"
@@ -17,13 +16,11 @@ IMAGE_LIMIT = 7
 PDF_LIMIT = 7
 ADMIN_USERNAME = "Image2pdfadmin"
 
-# --- Runtime Data ---
 PREMIUM_USERS = set()
 USER_IMAGES = {}
 USER_USAGE = {}
 LAST_REQUEST_TIME = {}
 
-# --- Load Premium Users ---
 if os.path.exists(PREMIUM_FILE):
     with open(PREMIUM_FILE, 'r') as f:
         for line in f:
@@ -32,7 +29,9 @@ if os.path.exists(PREMIUM_FILE):
             except:
                 continue
 
-# --- PDF Generator ---
+def is_premium(user_id):
+    return user_id in PREMIUM_USERS
+
 def create_pdf(images, filename):
     pdf = FPDF()
     for img in images:
@@ -40,11 +39,6 @@ def create_pdf(images, filename):
         pdf.image(img, x=10, y=10, w=190)
     pdf.output(filename)
 
-# --- Helper ---
-def is_premium(user_id):
-    return user_id in PREMIUM_USERS
-
-# --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     USER_USAGE.setdefault(user_id, {'images_used': 0, 'pdfs_generated': 0})
@@ -60,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_premium(user_id):
         await update.message.reply_text(
-            "🎉 You're a *PREMIUM* member!\nEnjoy unlimited access!",
+            "🎉 You're already a *PREMIUM* member!",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -70,24 +64,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if now - last > 43200:
             LAST_REQUEST_TIME[user_id] = now
             await update.message.reply_text(
-                f"⏰ *Reminder*: You haven't completed the payment.\n"
-                f"Pay ₹29 to `{UPI_ID}` and send screenshot with your ID: `{user_id}` to admin.",
+                f"⏰ Reminder: You haven’t completed payment.\n"
+                f"Pay ₹29 to `{UPI_ID}` and send screenshot to admin.\n"
+                f"🆔 ID: `{user_id}`",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("📤 Send to Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
                 ])
             )
-
         await update.message.reply_text(
-            "👋 *Welcome to Image2PDFMaster!*\n\n"
-            "📷 Free users: *7 images & 7 PDFs*\n"
-            "✨ Premium: *Unlimited access*\n\n"
-            f"🆔 Your User ID: `{user_id}`",
+            "👋 Welcome to Image2PDF Bot!\n"
+            f"🆔 Your ID: `{user_id}`",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
 
-# --- BUTTON HANDLER ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -97,10 +88,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     USER_IMAGES.setdefault(user_id, [])
 
     if query.data == 'send':
-        await query.edit_message_text("📤 Send or drop your images now.")
-
-    elif query.data == 'convert':
-        await convert_from_button(query, context)
+        await query.edit_message_text("📤 Send your images now.")
 
     elif query.data == 'clear':
         for img in USER_IMAGES[user_id]:
@@ -109,34 +97,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         USER_IMAGES[user_id] = []
         await query.edit_message_text("🗑️ All images cleared.")
 
+    elif query.data == 'convert':
+        await convert_to_pdf(query, context)
+
     elif query.data == 'get_premium':
         if not os.path.exists(USER_SEEN_FILE):
             open(USER_SEEN_FILE, "w").close()
 
         with open(USER_SEEN_FILE, "r") as f:
-            seen_ids = [line.strip() for line in f]
+            seen = [line.strip() for line in f]
 
-        if str(user_id) not in seen_ids:
+        if str(user_id) not in seen:
             with open(USER_SEEN_FILE, "a") as f:
                 f.write(str(user_id) + "\n")
 
         if is_premium(user_id):
-            await query.edit_message_text(
-                "🌟 You're already a *Premium* member!",
-                parse_mode='Markdown'
-            )
-            return
-
-        if os.path.exists(QR_IMAGE_PATH):
+            await query.edit_message_text("🌟 Already Premium!", parse_mode='Markdown')
+        elif os.path.exists(QR_IMAGE_PATH):
             with open(QR_IMAGE_PATH, 'rb') as qr:
                 await context.bot.send_photo(
                     chat_id=user_id,
                     photo=qr,
                     caption=(
-                        "💳 *Upgrade to Premium (₹29)*\n\n"
-                        f"Pay to UPI: `{UPI_ID}`\n"
-                        f"🆔 Your ID: `{user_id}`\n"
-                        "📩 Send screenshot to admin."
+                        "💳 Pay ₹29 to become Premium\n"
+                        f"UPI: `{UPI_ID}`\n"
+                        f"🆔 Your ID: `{user_id}`"
                     ),
                     parse_mode='Markdown',
                     reply_markup=InlineKeyboardMarkup([
@@ -144,13 +129,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ])
                 )
         else:
-            await query.edit_message_text(
-                f"💳 *Pay ₹29 to unlock Premium*\nUPI: `{UPI_ID}`\n🆔 ID: `{user_id}`",
-                parse_mode='Markdown'
-            )
+            await query.edit_message_text(f"Pay ₹29 to `{UPI_ID}`")
 
-# --- CONVERT TO PDF ---
-async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYPE):
+async def convert_to_pdf(update_or_query, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(update_or_query, Update):
         user_id = update_or_query.message.from_user.id
         reply = update_or_query.message.reply_text
@@ -164,14 +145,14 @@ async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYP
         return
 
     if not is_premium(user_id) and USER_USAGE[user_id]['pdfs_generated'] >= PDF_LIMIT:
-        await reply("🚫 PDF limit reached. Upgrade to Premium.")
+        await reply("🚫 PDF limit reached.")
         return
 
     filename = f"{user_id}_output.pdf"
     create_pdf(images, filename)
 
     with open(filename, 'rb') as f:
-        await context.bot.send_document(chat_id=user_id, document=f, filename="Image2PDFMaster.pdf")
+        await context.bot.send_document(chat_id=user_id, document=f)
 
     for img in images:
         os.remove(img)
@@ -181,43 +162,34 @@ async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYP
     if not is_premium(user_id):
         USER_USAGE[user_id]['pdfs_generated'] += 1
 
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=f"✅ PDF created!\nUsed: {USER_USAGE[user_id]['pdfs_generated']} of {PDF_LIMIT}."
-    )
-
-# --- HANDLE IMAGES ---
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     USER_IMAGES.setdefault(user_id, [])
     USER_USAGE.setdefault(user_id, {'images_used': 0, 'pdfs_generated': 0})
 
     if not is_premium(user_id) and USER_USAGE[user_id]['images_used'] >= IMAGE_LIMIT:
-        await update.message.reply_text("🚫 Image limit reached.")
+        await update.message.reply_text("🚫 Free image limit reached.")
         return
 
     file = await update.message.photo[-1].get_file()
-    img_path = f"{user_id}_{len(USER_IMAGES[user_id])}.jpg"
-    await file.download_to_drive(img_path)
-    USER_IMAGES[user_id].append(img_path)
+    path = f"{user_id}_{len(USER_IMAGES[user_id])}.jpg"
+    await file.download_to_drive(path)
+    USER_IMAGES[user_id].append(path)
 
     if not is_premium(user_id):
         USER_USAGE[user_id]['images_used'] += 1
 
-    await update.message.reply_text("🖼 Image saved!")
+    await update.message.reply_text("✅ Image saved!")
 
-# --- ERROR HANDLER ---
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    print(f"⚠️ Error: {context.error}")
+async def error_handler(update, context):
+    print("⚠️ Error:", context.error)
 
-# --- RUN BOT ---
+# Run the bot
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.PHOTO, handle_image))
     app.add_error_handler(error_handler)
-
     print("🤖 Bot is running...")
     app.run_polling()
-    
