@@ -1,12 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
+from telegram.error import TelegramError
 from fpdf import FPDF
 import os
 import time
@@ -214,8 +208,16 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🖼 Image saved!")
 
-# --- RUN BOT (not needed here if using runner.py) ---
+# --- ERROR HANDLER ---
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    print(f"⚠️ Error: {context.error}")
+
+# --- RUN BOT ---
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button_handler))
 app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+app.add_error_handler(error_handler)
+
+print("🤖 Bot is running...")
+app.run_polling()
