@@ -1,5 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
+    MessageHandler, ContextTypes, filters
+)
 from telegram.error import TelegramError
 from fpdf import FPDF
 import os
@@ -44,7 +47,7 @@ def is_premium(user_id):
 
 # --- START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
+    user_id = update.effective_user.id
     USER_USAGE.setdefault(user_id, {'images_used': 0, 'pdfs_generated': 0})
     USER_IMAGES.setdefault(user_id, [])
 
@@ -110,7 +113,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🗑️ All images cleared.")
 
     elif query.data == 'get_premium':
-        # Save user ID only once in user.txt
         if not os.path.exists(USER_SEEN_FILE):
             open(USER_SEEN_FILE, "w").close()
 
@@ -121,7 +123,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with open(USER_SEEN_FILE, "a") as f:
                 f.write(str(user_id) + "\n")
 
-        # Check if already premium
         if is_premium(user_id):
             await query.edit_message_text(
                 "🌟 You're already a *Premium* member!\nEnjoy unlimited features!",
@@ -130,20 +131,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if os.path.exists(QR_IMAGE_PATH):
-            with open(QR_IMAGE_PATH, 'rb') as qr:
-                await context.bot.send_photo(
-                    chat_id=user_id,
-                    photo=qr,
-                    caption=(
-                        "💳 *Upgrade to Premium (₹29)*\n\n"
-                        f"Pay to UPI: `{UPI_ID}`\n"
-                        f"🆔 Your ID: `{user_id}`\n"
-                        "📩 After payment, send screenshot to admin."
-                    ),
-                    parse_mode='Markdown',
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("📤 Send to Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
-                    ])
+            try:
+                with open(QR_IMAGE_PATH, 'rb') as qr:
+                    await context.bot.send_photo(
+                        chat_id=user_id,
+                        photo=qr,
+                        caption=(
+                            "💳 *Upgrade to Premium (₹29)*\n\n"
+                            f"Pay to UPI: `{UPI_ID}`\n"
+                            f"🆔 Your ID: `{user_id}`\n"
+                            "📩 After payment, send screenshot to admin."
+                        ),
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📤 Send to Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
+                        ])
+                    )
+            except TelegramError:
+                await query.edit_message_text(
+                    f"❗ Failed to send QR. Try again later.\n\nUPI: `{UPI_ID}`\nID: `{user_id}`",
+                    parse_mode='Markdown'
                 )
         else:
             await query.edit_message_text(
@@ -188,7 +195,7 @@ async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYP
         text=f"✅ PDF created!\nUsed: {USER_USAGE[user_id]['pdfs_generated']} of {PDF_LIMIT}."
     )
 
-# --- IMAGE UPLOAD HANDLER ---
+# --- IMAGE HANDLER ---
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     USER_IMAGES.setdefault(user_id, [])
@@ -206,18 +213,22 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_premium(user_id):
         USER_USAGE[user_id]['images_used'] += 1
 
-    await update.message.reply_text(f"🖼 Image saved!")
+    await update.message.reply_text("🖼 Image saved!")
 
 # --- ERROR HANDLER ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     print(f"⚠️ Error: {context.error}")
+    if update and isinstance(update, Update) and update.message:
+        await update.message.reply_text("⚠️ An error occurred. Please try again later.")
 
-# --- RUN BOT ---
+# --- BOT SETUP ---
 app = ApplicationBuilder().token(BOT_TOKEN).build()
+
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button_handler))
 app.add_handler(MessageHandler(filters.PHOTO, handle_image))
 app.add_error_handler(error_handler)
 
+# --- RUN ---
 print("🤖 Bot is running...")
 app.run_polling()
