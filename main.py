@@ -5,10 +5,8 @@ import os
 import time
 import logging
 
-# --- Logger ---
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+# Logging
+logging.basicConfig(level=logging.INFO)
 
 # --- CONFIG ---
 BOT_TOKEN = "7693918135:AAGO-4A2lCRMaDnpmItkOY94w1f16_D0iSw"
@@ -47,7 +45,7 @@ def create_pdf(images, filename):
 def is_premium(user_id):
     return user_id in PREMIUM_USERS
 
-# --- START COMMAND ---
+# --- START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     USER_USAGE.setdefault(user_id, {'images_used': 0, 'pdfs_generated': 0})
@@ -154,7 +152,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
 
-# --- CONVERT TO PDF ---
+# --- Convert PDF ---
 async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(update_or_query, Update):
         user_id = update_or_query.message.from_user.id
@@ -191,7 +189,7 @@ async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYP
         text=f"✅ PDF created!\nUsed: {USER_USAGE[user_id]['pdfs_generated']} of {PDF_LIMIT}."
     )
 
-# --- IMAGE HANDLER ---
+# --- Image Handler ---
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     USER_IMAGES.setdefault(user_id, [])
@@ -211,8 +209,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🖼 Image saved!")
 
-# --- RUN BOT ---
-if __name__ == "__main__":
+# --- App Start ---
+if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
@@ -220,4 +218,3 @@ if __name__ == "__main__":
 
     print("🤖 Bot is running...")
     app.run_polling()
-    
