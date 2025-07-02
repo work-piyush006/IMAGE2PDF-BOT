@@ -3,10 +3,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from fpdf import FPDF
 import os
 import time
-import logging
-
-# Logging
-logging.basicConfig(level=logging.INFO)
 
 # --- CONFIG ---
 BOT_TOKEN = "7693918135:AAGO-4A2lCRMaDnpmItkOY94w1f16_D0iSw"
@@ -41,11 +37,11 @@ def create_pdf(images, filename):
         pdf.image(img, x=10, y=10, w=190)
     pdf.output(filename)
 
-# --- Check Premium ---
+# --- Helper ---
 def is_premium(user_id):
     return user_id in PREMIUM_USERS
 
-# --- START ---
+# --- START COMMAND ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     USER_USAGE.setdefault(user_id, {'images_used': 0, 'pdfs_generated': 0})
@@ -152,7 +148,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
 
-# --- Convert PDF ---
+# --- CONVERT TO PDF ---
 async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYPE):
     if isinstance(update_or_query, Update):
         user_id = update_or_query.message.from_user.id
@@ -189,7 +185,7 @@ async def convert_from_button(update_or_query, context: ContextTypes.DEFAULT_TYP
         text=f"✅ PDF created!\nUsed: {USER_USAGE[user_id]['pdfs_generated']} of {PDF_LIMIT}."
     )
 
-# --- Image Handler ---
+# --- IMAGE UPLOAD HANDLER ---
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     USER_IMAGES.setdefault(user_id, [])
@@ -207,14 +203,18 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_premium(user_id):
         USER_USAGE[user_id]['images_used'] += 1
 
-    await update.message.reply_text("🖼 Image saved!")
+    await update.message.reply_text(f"🖼 Image saved!")
 
-# --- App Start ---
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+# --- Error Handler ---
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    print(f"⚠️ Error: {context.error}")
 
-    print("🤖 Bot is running...")
-    app.run_polling()
+# --- RUN BOT ---
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button_handler))
+app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+app.add_error_handler(error_handler)
+
+print("🤖 Bot is running...")
+app.run_polling()
